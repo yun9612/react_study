@@ -1,0 +1,7 @@
+export default function FooterW() {
+  return (
+    <footer className="footer">
+      <p>© 2025 My Website</p>
+    </footer>
+  );
+}
