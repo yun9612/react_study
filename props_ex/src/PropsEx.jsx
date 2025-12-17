@@ -121,23 +121,43 @@ function StatusCard({ status, message }) {
 
 // 4. 배열과 객체 props
 export function ComplexProps() {
-  const student = {
-    name: "김철수",
-    scores: [85, 92, 78, 95],
-    subjects: ["수학", "영어", "과학", "국어"],
-  };
+  const student = [
+    {
+      name: "김철수",
+      scores: [85, 92, 78, 95],
+      subjects: ["수학", "영어", "과학", "국어"],
+    },
+    {
+      name: "이영희",
+      scores: [85, 92, 78, 95],
+      subjects: ["수학", "영어", "과학", "국어"],
+    },
+  ];
+  const teacher = [
+    {
+      name: "이선생님",
+      subjects: ["수학", "물리"],
+      experience: 10,
+    },
+    {
+      name: "김선생님",
+      subjects: ["국어", "사회"],
+      experience: 8,
+    },
+  ];
   return (
     <div>
       <div style={{ padding: "20px", border: "2px solid #ddd", margin: "10px" }}>
         <h3>복잡한 Props(객체, 배열)</h3>
         <ScoreCard student={student} />
+        <TeacherCard teacher={teacher} />
       </div>
     </div>
   );
 }
 function ScoreCard({ student }) {
   // reduce() - 배열의 각 요소를 순회하며 콜백함수를 호출하여 하나의 값으로 만듦
-  const average = student.scores.reduce((a, b));
+  // const average = student.scores.reduce((a, b) => a + b, 0) / student.scores.length;
 
   return (
     <div
@@ -147,7 +167,8 @@ function ScoreCard({ student }) {
         margin: "10px",
         borderRadius: "8px",
       }}>
-      <h4>{student.name}의 성적표</h4>
+      {/* 한명일 경우 - 과목 안에서만 map함 */}
+      {/* <h4>{student.name}의 성적표</h4>
       <div>
         {student.subjects.map((subject, index) => (
           <p key={index}>
@@ -155,7 +176,46 @@ function ScoreCard({ student }) {
           </p>
         ))}
       </div>
-      <p style={{ fontWeight: "bold", color: "#1976d2" }}>평균 : {}점</p>
+      <p style={{ fontWeight: "bold", color: "#1976d2" }}>평균 : {average.toFixed(1)}점</p> */}
+
+      {/* 여러명일 경우 - map을 하고 그 안에 또 과목들을 map하면 됨 */}
+      {student.map((student, index) => (
+        <div key={index}>
+          <h4>{student.name}의 성적표</h4>
+          {student.subjects.map((subject, index) => (
+            <p key={index}>
+              {subject} : {student.scores[index]}점
+            </p>
+          ))}
+          <p>평균 : {student.scores.reduce((a, b) => a + b, 0) / student.scores.length.toFixed(1)}점</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+function TeacherCard({ teacher }) {
+  return (
+    <div
+      style={{
+        backgroundColor: "#fff3e0",
+        padding: "15px",
+        margin: "10px",
+        borderRadius: "8px",
+      }}>
+      {/* 한명일 경우 */}
+      {/* <h4>{teacher.name}</h4>
+      {/* join()-배열 나열하기, 어떤 형식으로 구분할지 표시 */}
+      {/* <p>담당 과목 : {teacher.subjects.join("/")}</p>
+      <p>경력 : {teacher.experience}년</p> */}
+
+      {/* 여러명일 경우 */}
+      {teacher.map((teacher, index) => (
+        <div>
+          <h4 key={index}>{teacher.name}</h4>
+          <p>담당 과목 : {teacher.subjects.join("/")}</p>
+          <p>경력 : {teacher.experience}년</p>
+        </div>
+      ))}
     </div>
   );
 }
