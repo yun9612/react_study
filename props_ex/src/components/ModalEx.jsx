@@ -134,7 +134,7 @@ export function ModalEx() {
                 <button type="submit" className="btn btnSuccess">
                   제출
                 </button>
-                <button type="button" className="btn btnSecondary">
+                <button type="button" className="btn btnSecondary" onClick={closeFormModal}>
                   취소
                 </button>
               </div>
