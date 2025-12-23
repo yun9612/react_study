@@ -1,67 +1,90 @@
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { useEffect, useState } from "react";
-import { auth, db, googleProvider } from "./Firebase";
+import { auth, db, googleProvider } from "./firebase";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
 
 export function Todo() {
+  // default
   const [user, setUser] = useState(null);
   const [task, setTask] = useState("");
   const [taskList, setTaskList] = useState([]);
   const [editId, setEditId] = useState(null);
   const [editText, setEditText] = useState("");
-  //   페이지가 처음 열릴때 로그인 상태 확인하기
+
+  // 페이지 열 때 로그인 되어 있는지 감시하기
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+    const unscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
-    // return : 나중에 이 감시를 그만둘때 사용(페이지를 떠나면 감시 중단)
+    return () => unscribeAuth();
+  }, []);
 
-    return () => unsubscribeAuth();
-  }, []); // []빈배열 : 페이지가 처음 열릴때만 실행
-  //   만약 아무도 로그인하기 않았다면 로그인 화면 보여주기
-  // 로그인한 사람의 할일 목록을 데이터베이스에서 가져오기
+  // 로그인한 사람의 할 일 목록 데이터베이스에서 가져오기
   useEffect(() => {
-    // 만약에 로그인 하지 않았다면
+    // 만약에 로그인하지 않았다면
     if (!user) {
       setTaskList([]);
-      return; //더이상 할일 없음 여기서 끝내기
+      return;
     }
     const q = query(collection(db, "todos"), where("userId", "==", user.uid));
-    // onSnapshot 데이터가 바뀔 때 마다 자동으로 알려주는 실시간 감시자
-    const unsubscribe = onSnapshot(
-      q, //위에서 만든 질문(나의 할일만 찾기)
-      (snapshot) => {
-        // console.log(snapshot);
-        const tasks = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(), //할 일 내용들
-          date: doc.data().createdAt?.toDate().toLocaleString() || "", //만든 날짜를 보기좋게 바꾸기
-          createdAtTimestamp: doc.data().createdAt, //나중에 정렬하기위해 시간 저보 보관 정렬 /비교용
-        }));
-        // console.log(tasks);
-        tasks.sort((a, b) => {
-          if (!a.createdAtTimestamp || !b.createdAtTimestamp) return 0;
-          return b.createdAtTimestamp.toMillis() - a.createdAtTimestamp.toMillis();
-        });
-        setTaskList(tasks);
-      }
-    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tasks = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().createdAt?.toDate().toLocaleString() || "",
+        createdAtTimestamp: doc.data().createdAt,
+      }));
+      tasks.sort((a, b) => {
+        if (!a.createdAtTimestamp || !b.createdAtTimestamp) return 0;
+        return b.createdAtTimestamp.toMillis() - a.createdAtTimestamp.toMillis();
+      });
+      setTaskList(tasks);
+    });
     return () => unsubscribe();
-  }, [user]); //user가 바뀔때 마다 실행(로그인 /로그아웃할때)
-  //   google로그인 클릭시
-  function handleGoogleLogin() {
-    // google로그인 창을 띄워서 로그인하기
+  }, [user]);
+
+  // google 클릭 시
+  function handleLogin() {
     signInWithPopup(auth, googleProvider)
       .then((result) => {
-        // console.log(result);
-
         setUser(result.user);
       })
       .catch((error) => {
         alert("로그인 실패: " + error.message + "\n\nFirebase 설정 정보를 확인해주세요!");
       });
   }
-  //   로그아웃버튼클릭시
+
+  // 로그인 화면
+  if (!user) {
+    return (
+      <div
+        style={{
+          textAlign: "center", // 글자를 가운데 정렬
+          marginTop: "50px", // 위에서 50px 떨어뜨리기
+          maxWidth: "400px", // 최대 너비 400px
+          marginLeft: "auto", // 왼쪽 여백 자동
+          marginRight: "auto", // 오른쪽 여백 자동 (가운데 정렬)
+        }}>
+        <h1>📝To Do List</h1>
+        <p style={{ marginTop: "30px", marginBottom: "20px" }}>Please log in.</p>
+        <button
+          onClick={handleLogin}
+          style={{
+            padding: "10px 20px", // 안쪽 여백 (위아래 10px, 좌우 20px)
+            fontSize: "16px", // 글자 크기
+            backgroundColor: "#4285f4", // 배경색 (파란색)
+            color: "white", // 글자색 (흰색)
+            border: "none", // 테두리 없음
+            borderRadius: "5px", // 모서리를 둥글게
+            cursor: "pointer", // 마우스를 올리면 손가락 모양으로 바뀜
+          }}>
+          Google Login
+        </button>
+      </div>
+    );
+  }
+
+  // 로그아웃 버튼 클릭
   function handleLogout() {
     signOut(auth)
       .then(() => {
@@ -72,15 +95,16 @@ export function Todo() {
         console.log("로그아웃 실패:", error); // 콘솔에 실패 메시지 출력
       });
   }
-  //   할일 추가 버튼
+
+  // 할 일 추가 버튼
   async function handleAdd() {
-    if ((task.trim() === "") || !user) return;
+    if (task.trim() === "" || !user) return;
     try {
       await addDoc(collection(db, "todos"), {
         userId: user.uid,
-        text: task, //할일 내용
+        text: task,
         done: false,
-        createdAt: Timestamp.now(), // 지금 시간을 기록
+        createdAt: Timestamp.now(),
       });
       setTask("");
     } catch (error) {
@@ -93,7 +117,7 @@ export function Todo() {
   // 할일 완료 토글
   async function toggleDone(id) {
     const task = taskList.find((t) => t.id === id);
-    if (!task) return; // 만약에 찾지 못하면 여기서 끝내기
+    if (!task) return;
     try {
       const taskRef = doc(db, "todos", id);
       await updateDoc(taskRef, {
@@ -105,9 +129,10 @@ export function Todo() {
       alert("완료 상태 변경에 실패했습니다: " + error.message); // 사용자에게 에러 메시지 보여주기
     }
   }
-  // 할일 수정 저장
+
+  // 할일 수정내용 저장
   async function handleEditSave(id) {
-    if (editText.trim() === "") return; // 입력값이 없으면 그냥 끝내기
+    if (editText.trim() === "") return;
     try {
       const taskRef = doc(db, "todos", id);
       await updateDoc(taskRef, {
@@ -121,7 +146,8 @@ export function Todo() {
       alert("수정에 실패했습니다: " + error.message); // 사용자에게 에러 메시지 보여주기
     }
   }
-  // 할일 수정 폼 열기
+
+  // 할일 수정 폼
   function handleEditStart(id, currentText) {
     setEditId(id);
     setEditText(currentText);
@@ -129,7 +155,7 @@ export function Todo() {
 
   // 할일 삭제
   async function handleDelete(id) {
-    if (!window.confirm("정말 삭제하시겠습니까?")) return;
+    if (!window.confirm("Would you like to delete it?")) return;
     try {
       const taskRef = doc(db, "todos", id);
       await deleteDoc(taskRef);
@@ -140,49 +166,17 @@ export function Todo() {
     }
   }
 
-  // 로그인화면
-  if (!user) {
-    return (
-      <div
-        style={{
-          // style: 화면에 보이는 모양을 정하는 것
-          textAlign: "center", // 글자를 가운데 정렬
-          marginTop: "50px", // 위에서 50px 떨어뜨리기
-          maxWidth: "400px", // 최대 너비 400px
-          marginLeft: "auto", // 왼쪽 여백 자동
-          marginRight: "auto", // 오른쪽 여백 자동 (가운데 정렬)
-        }}>
-        <h1>📋 할 일 관리</h1> {/* 제목 */}{" "}
-        <p style={{ marginTop: "30px", marginBottom: "20px" }}>로그인이 필요합니다 {/* 안내 문구 */}</p>
-        <button
-          onClick={handleGoogleLogin}
-          style={{
-            // 버튼의 모양 정하기
-            padding: "10px 20px", // 안쪽 여백 (위아래 10px, 좌우 20px)
-            fontSize: "16px", // 글자 크기
-            backgroundColor: "#4285f4", // 배경색 (파란색)
-            color: "white", // 글자색 (흰색)
-            border: "none", // 테두리 없음
-            borderRadius: "5px", // 모서리를 둥글게
-            cursor: "pointer", // 마우스를 올리면 손가락 모양으로 바뀜
-          }}>
-          Google로 로그인
-        </button>
-      </div>
-    );
-  }
-  //   구글로그인 됐을때
+  // 구글 로그인 했을 때 html
   return (
     <div
       style={{
-        // style: 화면에 보이는 모양을 정하는 것
         textAlign: "center", // 글자를 가운데 정렬
         marginTop: "50px", // 위에서 50px 떨어뜨리기
         maxWidth: "400px", // 최대 너비 400px
         marginLeft: "auto", // 왼쪽 여백 자동
         marginRight: "auto", // 오른쪽 여백 자동 (가운데 정렬)
       }}>
-      {/* 헤더 부분: 제목과 사용자 정보, 로그아웃 버튼 */}
+      {/* 제목, 사용자 이름, 로그아웃 버튼 */}
       <div
         style={{
           display: "flex", // 가로로 나란히 배치
@@ -190,12 +184,10 @@ export function Todo() {
           alignItems: "center", // 세로로 가운데 정렬
           marginBottom: "20px", // 아래쪽 여백
         }}>
-        <h1>할일 관리</h1>
-        {/* 헤터부분 : 제목과 사용자 정보,로그아웃버튼 */}
+        <h1>📝To Do List</h1>
         <div>
-          {/* 사용자 이름 또는 이메일 표시 */}
+          {/* 사용자 이름, 로그아웃 버튼 */}
           <span style={{ marginRight: "10px" }}>{user.displayName || user.email}</span>
-          {/* 로그아웃 버튼 */}
           <button
             onClick={handleLogout}
             style={{
@@ -207,34 +199,48 @@ export function Todo() {
               borderRadius: "5px", // 모서리를 둥글게
               cursor: "pointer", // 마우스를 올리면 손가락 모양으로 바뀜
             }}>
-            로그아웃
+            Logout
           </button>
         </div>
       </div>
-      {/* 할일 입력 부분 */}
+      {/* 할일 입력창 */}
       <input
         type="text"
-        placeholder="할일을 입력하세요."
+        placeholder="Enter what to do"
         value={task}
+        style={{
+          padding: "5px 10px", // 안쪽 여백
+          borderRadius: "5px", // 모서리를 둥글게
+          border: "none", // 테두리 없음
+          backgroundColor: "#f1f1f1",
+          marginRight: "10px",
+        }}
         onChange={(e) => {
           setTask(e.target.value);
         }}
-        style={{ padding: "10px", fontSize: "16px", width: "70%" }}
       />
-      {/* 추가 버튼 */}
-      <button onClick={handleAdd} style={{ padding: "10px", marginLeft: "10px" }}>
-        추가
+      <button
+        onClick={handleAdd}
+        style={{
+          padding: "5px 10px", // 안쪽 여백
+          fontSize: "14px", // 글자 크기
+          backgroundColor: "#3562dcff", // 배경색 (빨간색)
+          color: "white", // 글자색 (흰색)
+          border: "none", // 테두리 없음
+          borderRadius: "5px", // 모서리를 둥글게
+          cursor: "pointer", // 마우스를 올리면 손가락 모양으로 바뀜
+        }}>
+        Add
       </button>
-      {/* 할 일 목록 부분 */}
+      {/* 할일 목록 */}
       <ul
         style={{
-          // ul: 목록을 만드는 태그
           listStyle: "none", // 목록 앞의 점(불릿) 제거
           padding: 0, // 안쪽 여백 없음
           marginTop: "20px", // 위쪽 여백
           textAlign: "left", // 글자를 왼쪽 정렬
         }}>
-        {taskList.map(({ id, text, date, done }) => (
+        {taskList.map(({ id, text, done, date }) => (
           <li
             key={id}
             style={{
@@ -250,9 +256,7 @@ export function Todo() {
             }}>
             <div>
               <input type="checkbox" checked={done} onChange={() => toggleDone(id)} style={{ marginRight: "10px" }} />
-              {/* 할일이 수정 모드일때 */}
               {editId === id ? (
-                // 수정모드일때
                 <>
                   <input
                     type="text"
@@ -263,7 +267,7 @@ export function Todo() {
                     style={{ padding: "5px", fontSize: "14px", width: "70%" }}
                   />
                   <button
-                    onClick={() => handleEditSave(id)} // 버튼을 클릭하면 handleEditSave 함수 실행
+                    onClick={() => handleEditSave(id)}
                     style={{
                       marginLeft: "5px", // 왼쪽 여백
                       padding: "5px 8px", // 안쪽 여백
@@ -273,28 +277,18 @@ export function Todo() {
                       borderRadius: "4px", // 모서리를 둥글게
                       cursor: "pointer", // 마우스를 올리면 손가락 모양으로 바뀜
                     }}>
-                    저장 {/* 버튼에 보이는 글자 */}
+                    Save
                   </button>
                 </>
               ) : (
                 <>
-                  <strong
-                    style={{
-                      // strong: 굵은 글씨
-                      textDecoration: done ? "line-through" : "none",
-                      // done이 true(완료)면 취소선, false(미완료)면 취소선 없음
-                    }}>
-                    {text} {/* 할 일의 내용 (예: "숙제하기") */}
-                  </strong>
-                  <br /> {/* 줄바꿈 */}
-                  <small style={{ color: "#666" }}>{date}</small>
-                  {/* small: 작은 글씨, 날짜를 회색으로 표시 */}
+                  <strong>{text}</strong>
+                  <br />
+                  <small>{date}</small>
                 </>
               )}
             </div>
-            {/* 오른쪽 부분: 수정 버튼과 삭제 버튼 */}
             <div>
-              {/* editId !== id: 이 할 일이 수정 모드가 아닐 때만 수정 버튼 보여주기 */}
               {editId !== id && (
                 <button
                   onClick={() => handleEditStart(id, text)} // 버튼을 클릭하면 handleEditStart 함수 실행
@@ -307,11 +301,9 @@ export function Todo() {
                     cursor: "pointer", // 마우스를 올리면 손가락 모양으로 바뀜
                     marginRight: "5px", // 오른쪽 여백
                   }}>
-                  수정 {/* 버튼에 보이는 글자 */}
+                  Edit
                 </button>
               )}
-
-              {/* 삭제 버튼 */}
               <button
                 onClick={() => handleDelete(id)} // 버튼을 클릭하면 handleDelete 함수 실행
                 style={{
@@ -322,7 +314,7 @@ export function Todo() {
                   padding: "5px 8px", // 안쪽 여백
                   cursor: "pointer", // 마우스를 올리면 손가락 모양으로 바뀜
                 }}>
-                삭제 {/* 버튼에 보이는 글자 */}
+                Delete
               </button>
             </div>
           </li>
