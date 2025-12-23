@@ -1,4 +1,10 @@
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+} from "firebase/auth";
 import { useEffect, useState } from "react";
 import { auth, db, googleProvider } from "./Firebase";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
@@ -9,6 +15,9 @@ export function Todo() {
   const [taskList, setTaskList] = useState([]);
   const [editId, setEditId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   //   페이지가 처음 열릴때 로그인 상태 확인하기
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -48,7 +57,69 @@ export function Todo() {
     );
     return () => unsubscribe();
   }, [user]); //user가 바뀔때 마다 실행(로그인 /로그아웃할때)
-  //   google로그인 클릭시
+
+  // 이메일로 로그인
+  async function handleEmailLogin() {
+    if (email.trim() === "" || password.trim() === "") {
+      alert("이메일과 비밀번호를 모두 입력하세요.");
+      return; // 여기서 끝내지
+    }
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      console.log("로그인성공", result.user);
+      setEmail("");
+      setPassword("");
+    } catch (error) {
+      console.error("로그인 실패:", error);
+
+      // 에러 메시지를 사용자에게 쉽게 알려주기
+      let errorMessage = "";
+      if (error.code === "auth/invalid-credential") {
+        // 최신 Firebase: 잘못된 이메일 또는 비밀번호 (보안상 구체적인 정보 제공 안 함)
+        errorMessage =
+          "이메일 주소 또는 비밀번호가 올바르지 않습니다.\n\n등록되지 않은 이메일이거나 비밀번호가 틀렸을 수 있습니다.\n회원가입을 먼저 진행해주시거나 입력 정보를 확인해주세요.";
+      }
+      alert(errorMessage); // 사용자에게 에러 메시지 보여주기
+    }
+  }
+
+  // 회원가입
+  async function handleEmailSignUp() {
+    if (email.trim() === "" || password.trim() === "") {
+      alert("이메일과 비밀번호를 모두 입력하세요.");
+      return; // 입력창이 비어있을 경우 끝내기
+    }
+    // 비밀번호가 조건에 맞지 않으면
+    if (password.length < 6) {
+      alert("비밀번호 6자 이상이여야 합니다.");
+      return;
+    }
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      alert("회원가입이 완료되었습니다.");
+      setEmail("");
+      setPassword("");
+      console.log(result.user);
+    } catch (error) {
+      console.error("회원가입 실패 : ", error);
+      let errorMessage = "회원가입에 실패했습니다.";
+      // 이미 가입된 이메일인 경우
+      if (error.code === "auth/email-already-in-use") {
+        errorMessage += "이미 사용중인 이메일입니다. 다른 이메일로 가입해주세요.";
+      }
+      // 이메일 형식이 틀린 경우
+      else if (error.code === "auth/invalid-email") {
+        errorMessage += "올바른 이메일 형식이 아닙니다.";
+      } // 비밀번호가 너무 약한 보호성을 가진 경우
+      else if (error.code === "auth/weak-password") {
+        errorMessage += "비밀번호가 약합니다.";
+      } else {
+        errorMessage += error.message; // 그 외의 에러
+      }
+      alert(errorMessage);
+    }
+  }
+  // google로그인 클릭시
   function handleGoogleLogin() {
     // google로그인 창을 띄워서 로그인하기
     signInWithPopup(auth, googleProvider)
@@ -61,7 +132,7 @@ export function Todo() {
         alert("로그인 실패: " + error.message + "\n\nFirebase 설정 정보를 확인해주세요!");
       });
   }
-  //   로그아웃버튼클릭시
+  // 로그아웃버튼클릭시
   function handleLogout() {
     signOut(auth)
       .then(() => {
@@ -72,9 +143,9 @@ export function Todo() {
         console.log("로그아웃 실패:", error); // 콘솔에 실패 메시지 출력
       });
   }
-  //   할일 추가 버튼
+  // 할일 추가 버튼
   async function handleAdd() {
-    if ((task.trim() === "") || !user) return;
+    if (task.trim() === "" || !user) return;
     try {
       await addDoc(collection(db, "todos"), {
         userId: user.uid,
@@ -154,6 +225,112 @@ export function Todo() {
         }}>
         <h1>📋 할 일 관리</h1> {/* 제목 */}{" "}
         <p style={{ marginTop: "30px", marginBottom: "20px" }}>로그인이 필요합니다 {/* 안내 문구 */}</p>
+        {/* 이메일과 비밀번호로 로그인 */}
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "20px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+            backgroundColor: "#f9f9f9",
+          }}>
+          <h3 style={{ marginTop: "0", marginBottom: "15px" }}>📧 이메일로 로그인</h3>
+          {/* 이메일 입력창 */}
+          <input
+            style={{
+              padding: "10px",
+              fontSize: "16px",
+              width: "100%",
+              marginBottom: "10px",
+              border: "1px solid #ccc",
+              borderRadius: "5px",
+              boxSizing: "border-box",
+            }}
+            type="email"
+            placeholder="이메일 주소를 입력하세요"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          {/* 비밀번호 입력창 */}
+          <input
+            type="password"
+            placeholder="비밀번호를 입력하세요"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{
+              padding: "10px",
+              fontSize: "16px",
+              width: "100%",
+              marginBottom: "10px",
+              border: "1px solid #ccc",
+              borderRadius: "5px",
+              boxSizing: "border-box",
+            }}
+          />
+          {/* 로그인, 회원가입 버튼 */}
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+            }}>
+            {/* 로그인 버튼 */}
+            <button
+              onClick={handleEmailLogin}
+              style={{
+                flex: 1,
+                padding: "10px 20px",
+                fontSize: "16px",
+                backgroundColor: "#28a745",
+                color: "white",
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}>
+              🔐 로그인 {/* 버튼에 보이는 글자 */}
+            </button>
+
+            {/* 회원가입 버튼 */}
+            <button
+              onClick={handleEmailSignUp}
+              style={{
+                flex: 1,
+                padding: "10px 20px",
+                fontSize: "16px",
+                backgroundColor: "#17a2b8",
+                color: "white",
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}>
+              ✏️ 회원가입
+            </button>
+          </div>
+        </div>
+        {/* 구분선 */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            margin: "20px 0",
+          }}>
+          <div
+            style={{
+              flex: 1,
+              height: "1px",
+              backgroundColor: "#ddd",
+            }}
+          />
+          <span style={{ margin: "0 10px", color: "#666" }}>또는</span>
+          {/* "또는" 글자 */}
+          <div
+            style={{
+              flex: 1, // 남은 공간을 차지
+              height: "1px", // 높이 1px
+              backgroundColor: "#ddd", // 배경색 (연한 회색)
+            }}
+          />
+        </div>
+        {/* 구글 로그인 버튼 */}
         <button
           onClick={handleGoogleLogin}
           style={{
