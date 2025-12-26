@@ -34,6 +34,7 @@ export function Todo() {
               ...t, // 기존 항목의 다른 속성은 그대로 두고
               done: !t.done, // done 값을 true > false 반전
             }
+            
           : t
       )
     );
